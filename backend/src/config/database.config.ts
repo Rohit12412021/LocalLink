@@ -45,12 +45,21 @@ export function getTypeOrmConfig(): TypeOrmModuleOptions {
   assertPostgresConfigured();
 
   const isProd = process.env.NODE_ENV === 'production';
- const sync =
-  process.env.DATABASE_SYNC === 'true' ||
-  (!isProd && process.env.DATABASE_SYNC !== 'false');
+
+  // In production: allow DATABASE_SYNC=true to force sync (useful for initial deploy)
+  // In development: sync unless explicitly disabled
+  const sync =
+    process.env.DATABASE_SYNC === 'true' ||
+    (!isProd && process.env.DATABASE_SYNC !== 'false');
+
+  // Render and most cloud Postgres providers require SSL
   const ssl =
     process.env.DATABASE_SSL === 'true' ||
-    process.env.DATABASE_URL?.includes('sslmode=require');
+    isProd ||
+    process.env.DATABASE_URL?.includes('sslmode=require') ||
+    process.env.DATABASE_URL?.includes('render.com') ||
+    process.env.DATABASE_URL?.includes('neon.tech') ||
+    process.env.DATABASE_URL?.includes('supabase.co');
 
   if (process.env.DATABASE_URL) {
     return {
@@ -59,6 +68,7 @@ export function getTypeOrmConfig(): TypeOrmModuleOptions {
       autoLoadEntities: true,
       synchronize: sync,
       ssl: ssl ? { rejectUnauthorized: false } : undefined,
+      extra: ssl ? { ssl: { rejectUnauthorized: false } } : undefined,
     };
   }
 
