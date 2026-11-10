@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Backend owns its own linting (oxlint) and build output must never be linted:
+    "backend/**",
   ]),
 ]);
 

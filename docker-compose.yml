@@ -1,0 +1,52 @@
+# LocalLink production-style local stack
+# Usage: docker compose up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: locallink
+      POSTGRES_PASSWORD: locallink
+      POSTGRES_DB: locallink
+    ports:
+      - "5432:5432"
+    volumes:
+      - locallink_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U locallink -d locallink"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - locallink_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Optional local S3-compatible storage (MinIO)
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: locallink
+      MINIO_ROOT_PASSWORD: locallinksecret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - locallink_minio:/data
+
+volumes:
+  locallink_pg:
+  locallink_redis:
+  locallink_minio:
