@@ -154,43 +154,44 @@ function RequestForm({
         {/* Service selection */}
         <section className="card p-6">
           <h2 className="text-lg font-bold text-ink">What service do you need?</h2>
-          <div className="mt-4 space-y-2.5">
-            {provider.services.map((item) => {
-              const active = service === item.name;
-              return (
-                <label
-                  key={item.name}
-                  className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-4 transition-colors ${
-                    active
-                      ? "border-brand bg-brand-soft/50"
-                      : "border-line hover:border-brand/50 hover:bg-surface-soft/50"
-                  }`}
-                >
-                  <span className="flex items-center gap-3">
-                    <span
-                      className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${
-                        active
-                          ? "border-brand bg-brand"
-                          : "border-ink-faint"
-                      }`}
-                    >
-                      {active ? <Check size={12} className="text-white" /> : null}
+
+          {provider.services.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-warning/30 bg-warning-soft p-5 text-center">
+              <p className="font-semibold text-ink">This provider has no services listed yet.</p>
+              <p className="mt-1 text-sm text-ink-mute">
+                The provider hasn&apos;t added any services to their profile. Try another provider.
+              </p>
+              <Link href="/search" className="btn btn-outline btn-sm mt-4">
+                ← Browse other providers
+              </Link>
+            </div>
+          ) : (
+            <div className="mt-4 space-y-2.5">
+              {provider.services.map((item) => {
+                const active = service === item.name;
+                return (
+                  <label
+                    key={item.name}
+                    className={`flex cursor-pointer items-center justify-between gap-3 rounded-xl border p-4 transition-colors ${
+                      active
+                        ? "border-brand bg-brand-soft/50"
+                        : "border-line hover:border-brand/50 hover:bg-surface-soft/50"
+                    }`}
+                  >
+                    <span className="flex items-center gap-3">
+                      <span className={`flex h-5 w-5 items-center justify-center rounded-full border-2 ${active ? "border-brand bg-brand" : "border-ink-faint"}`}>
+                        {active ? <Check size={12} className="text-white" /> : null}
+                      </span>
+                      <span className="font-medium text-ink">{item.name}</span>
                     </span>
-                    <span className="font-medium text-ink">{item.name}</span>
-                  </span>
-                  <span className="text-sm font-bold text-brand">{item.price}</span>
-                  <input
-                    type="radio"
-                    name="service"
-                    value={item.name}
-                    checked={active}
-                    onChange={(e) => setService(e.target.value)}
-                    className="sr-only"
-                  />
-                </label>
-              );
-            })}
-          </div>
+                    <span className="text-sm font-bold text-brand">{item.price}</span>
+                    <input type="radio" name="service" value={item.name} checked={active}
+                      onChange={(e) => setService(e.target.value)} className="sr-only" />
+                  </label>
+                );
+              })}
+            </div>
+          )}
 
           {priceHint ? (
             <p className="mt-4 flex items-center gap-2 rounded-xl bg-accent-soft px-4 py-3 text-sm font-medium text-accent-strong">
@@ -285,7 +286,11 @@ function RequestForm({
           />
         </section>
 
-        <button type="submit" disabled={loading} className="btn btn-brand btn-block btn-lg">
+        <button
+          type="submit"
+          disabled={loading || provider.services.length === 0}
+          className="btn btn-brand btn-block btn-lg"
+        >
           {loading ? "Submitting request..." : "Submit service request"}
         </button>
       </form>
