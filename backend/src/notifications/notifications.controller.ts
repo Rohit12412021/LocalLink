@@ -1,3 +1,4 @@
+
 import {
   Controller,
   Get,
@@ -5,12 +6,17 @@ import {
   HttpStatus,
   Param,
   Patch,
+  UseGuards,
+  UnauthorizedException,
 } from '@nestjs/common';
+
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { JwtPayloadUser } from '../common/types/jwt-payload';
 import { NotificationsService } from './notifications.service';
 
 @Controller('notifications')
+@UseGuards(JwtAuthGuard)
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
@@ -18,7 +24,7 @@ export class NotificationsController {
   @HttpCode(HttpStatus.OK)
   list(@CurrentUser() user: JwtPayloadUser) {
     if (!user) {
-      throw new Error('Unauthorized');
+      throw new UnauthorizedException('Please sign in to continue');
     }
     return this.notificationsService.listForUser(user.userId);
   }
@@ -27,7 +33,7 @@ export class NotificationsController {
   @HttpCode(HttpStatus.OK)
   unreadCount(@CurrentUser() user: JwtPayloadUser) {
     if (!user) {
-      throw new Error('Unauthorized');
+      throw new UnauthorizedException('Please sign in to continue');
     }
     return this.notificationsService.unreadCount(user.userId);
   }
@@ -39,7 +45,7 @@ export class NotificationsController {
     @Param('id') id: string,
   ) {
     if (!user) {
-      throw new Error('Unauthorized');
+      throw new UnauthorizedException('Please sign in to continue');
     }
     return this.notificationsService.markRead(user.userId, id);
   }
@@ -48,7 +54,7 @@ export class NotificationsController {
   @HttpCode(HttpStatus.OK)
   markAllRead(@CurrentUser() user: JwtPayloadUser) {
     if (!user) {
-      throw new Error('Unauthorized');
+      throw new UnauthorizedException('Please sign in to continue');
     }
     return this.notificationsService.markAllRead(user.userId);
   }

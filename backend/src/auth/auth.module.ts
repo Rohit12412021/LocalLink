@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+
+import { forwardRef, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -27,7 +28,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
         signOptions: { expiresIn: '7d' },
       }),
     }),
-    NotificationsModule,
+    forwardRef(() => NotificationsModule),
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, GoogleStrategy],
