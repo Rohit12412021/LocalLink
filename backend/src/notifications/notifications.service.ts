@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Resend } from 'resend';
+import { google } from 'googleapis';
 import { SocketGateway } from './socket.gateway';
 import { NotificationEntity } from './entities/notification.entity';
 
@@ -23,7 +23,7 @@ export type CreateNotificationInput = {
 @Injectable()
 export class NotificationsService implements OnModuleInit {
   private readonly logger = new Logger(NotificationsService.name);
-  private resend!: Resend;
+  private gmail: ReturnType<typeof google.gmail> | null = null;
 
   constructor(
     @InjectRepository(NotificationEntity)
@@ -32,62 +32,90 @@ export class NotificationsService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    const apiKey = process.env.RESEND_API_KEY?.trim();
+    const clientId = process.env.GMAIL_CLIENT_ID?.trim();
+    const clientSecret = process.env.GMAIL_CLIENT_SECRET?.trim();
+    const refreshToken = process.env.GMAIL_REFRESH_TOKEN?.trim();
+    const sender = process.env.GMAIL_USER?.trim();
 
-    if (!apiKey) {
-      throw new Error('RESEND_API_KEY is not configured');
+    if (!clientId || !clientSecret || !refreshToken || !sender) {
+      this.logger.warn(
+        '[Email] Gmail credentials missing. Email sending is disabled.',
+      );
+      return;
     }
 
-    this.resend = new Resend(apiKey);
+    const auth = new google.auth.OAuth2(
+      clientId,
+      clientSecret,
+      'https://developers.google.com/oauthplayground',
+    );
 
-    this.logger.log('[Email] Resend API initialized successfully');
-  }
-
-  private get fromAddress(): string {
-    return process.env.EMAIL_FROM || 'onboarding@resend.dev';
-  }
-
-private async sendEmail(
-  to: string,
-  subject: string,
-  content: { html?: string; text?: string },
-) {
-  let result;
-
-  if (content.html !== undefined) {
-    result = await this.resend.emails.send({
-      from: this.fromAddress,
-      to: [to],
-      subject,
-      html: content.html,
+    auth.setCredentials({
+      refresh_token: refreshToken,
     });
-  } else if (content.text !== undefined) {
-    result = await this.resend.emails.send({
-      from: this.fromAddress,
-      to: [to],
-      subject,
-      text: content.text,
+
+    this.gmail = google.gmail({
+      version: 'v1',
+      auth,
     });
-  } else {
-    throw new Error('Email must contain HTML or text');
+
+    this.logger.log('[Email] Gmail API initialized successfully');
   }
 
-  if (result.error) {
-    this.logger.error(`[Email Error] ${result.error.message}`);
-    throw new Error(result.error.message);
+  private async sendEmail(
+    to: string,
+    subject: string,
+    content: { html?: string; text?: string },
+  ) {
+    if (!this.gmail) {
+      throw new Error('Gmail API is not configured');
+    }
+
+    const sender = process.env.GMAIL_USER?.trim();
+
+    if (!sender) {
+      throw new Error('GMAIL_USER is not configured');
+    }
+
+    const body = content.html ?? content.text;
+
+    if (body === undefined) {
+      throw new Error('Email must contain HTML or text');
+    }
+
+    const contentType =
+      content.html !== undefined ? 'text/html' : 'text/plain';
+
+    const encodedBody = Buffer.from(body, 'utf8').toString('base64');
+
+    const message = [
+      `From: LocalLink <${sender}>`,
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      'MIME-Version: 1.0',
+      `Content-Type: ${contentType}; charset=utf-8`,
+      'Content-Transfer-Encoding: base64',
+      '',
+      encodedBody,
+    ].join('\r\n');
+
+    const raw = Buffer.from(message, 'utf8').toString('base64url');
+
+    const result = await this.gmail.users.messages.send({
+      userId: 'me',
+      requestBody: { raw },
+    });
+
+    this.logger.log(
+      `[Email] Sent successfully to ${to}. ID: ${result.data.id}`,
+    );
+
+    return result.data;
   }
 
-  this.logger.log(
-    `[Email] Sent successfully to ${to}. ID: ${result.data?.id}`,
-  );
-
-  return result.data;
-}
-
-
-  // ---------------------------------------------------------------------------
+  // --------------------------------------------------
   // In-app notifications
-  // ---------------------------------------------------------------------------
+  // --------------------------------------------------
 
   async createNotification(input: CreateNotificationInput) {
     const notification = this.notificationsRepo.create({
@@ -167,9 +195,9 @@ private async sendEmail(
     return { ok: true };
   }
 
-  // ---------------------------------------------------------------------------
-  // Emails
-  // ---------------------------------------------------------------------------
+  // --------------------------------------------------
+  // Email: Verification
+  // --------------------------------------------------
 
   async sendVerificationEmail(email: string, name: string, token: string) {
     try {
@@ -181,20 +209,24 @@ private async sendEmail(
         email,
         'Verify Your Email Address - LocalLink',
         {
-          html: `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-          <body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f0e8;">
-          <div style="max-width:600px;margin:0 auto;padding:40px 20px;">
-          <div style="text-align:center;margin-bottom:30px;"><h1 style="color:#0f766e;font-size:32px;font-weight:bold;margin:0;">LocalLink</h1><p style="color:#54575e;font-size:16px;margin:8px 0 0;">Find Trusted Local Services</p></div>
-          <div style="background:#ffffff;border-radius:16px;padding:40px;box-shadow:0 8px 24px rgba(0,0,0,0.08);">
-          <h2 style="color:#1c1917;font-size:24px;margin:0 0 20px;">Verify Your Email Address</h2>
-          <p style="color:#44403c;font-size:16px;line-height:1.6;margin:0 0 10px;">Hi ${name},</p>
-          <p style="color:#44403c;font-size:16px;line-height:1.6;margin:0 0 30px;">Thanks for joining LocalLink. Confirm your email to start booking trusted local services.</p>
-          <div style="text-align:center;margin:40px 0;"><a href="${verificationUrl}" style="display:inline-block;background:#0f766e;color:#ffffff;padding:16px 32px;text-decoration:none;border-radius:10px;font-weight:600;font-size:16px;">Verify Email Address</a></div>
-          <div style="background:#f5f0e8;border-radius:10px;padding:16px;margin:30px 0;"><p style="color:#54575e;font-size:14px;margin:0 0 8px;font-weight:600;">Or copy and paste this link:</p><a href="${verificationUrl}" style="color:#0f766e;word-break:break-all;font-size:14px;">${verificationUrl}</a></div>
-          <p style="color:#a8a29e;font-size:14px;margin:20px 0 0;line-height:1.6;">This link expires in 24 hours.</p>
-          <hr style="border:none;border-top:1px solid #e7e5e4;margin:30px 0;">
-          <p style="color:#57534e;font-size:14px;margin:0;">Didn't create an account with LocalLink? Ignore this email.</p>
-          </div></div></body></html>`,
+          html: `<!DOCTYPE html>
+<html>
+<body style="margin:0;padding:30px;font-family:Arial;background:#f5f0e8;">
+<div style="max-width:600px;margin:auto;background:white;padding:35px;border-radius:15px;">
+<h1 style="color:#0f766e;text-align:center;">LocalLink</h1>
+<h2>Verify Your Email Address</h2>
+<p>Hi ${name},</p>
+<p>Thanks for joining LocalLink. Confirm your email to start booking trusted local services.</p>
+<div style="text-align:center;margin:35px;">
+<a href="${verificationUrl}" style="background:#0f766e;color:white;padding:15px 25px;text-decoration:none;border-radius:8px;">Verify Email Address</a>
+</div>
+<p>Or copy this link:</p>
+<a href="${verificationUrl}">${verificationUrl}</a>
+<p style="color:#888;font-size:13px;">This link expires in 24 hours.</p>
+<p>Didn't create an account? Ignore this email.</p>
+</div>
+</body>
+</html>`,
         },
       );
     } catch (e) {
@@ -202,6 +234,10 @@ private async sendEmail(
       throw e;
     }
   }
+
+  // --------------------------------------------------
+  // Email: Password reset
+  // --------------------------------------------------
 
   async sendPasswordResetEmail(email: string, name: string, token: string) {
     try {
@@ -213,15 +249,17 @@ private async sendEmail(
         email,
         'Reset Your Password - LocalLink',
         {
-          html: `<div style="max-width:600px;margin:0 auto;padding:40px 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f0e8;">
-          <div style="text-align:center;margin-bottom:30px;"><h1 style="color:#0f766e;font-size:32px;font-weight:bold;margin:0;">LocalLink</h1></div>
-          <div style="background:#ffffff;border-radius:16px;padding:40px;box-shadow:0 8px 24px rgba(0,0,0,0.08);">
-          <h2 style="color:#1c1917;font-size:24px;margin:0 0 20px;">Reset Your Password</h2>
-          <p style="color:#44403c;font-size:16px;line-height:1.6;">Hi ${name},</p>
-          <p style="color:#44403c;font-size:16px;line-height:1.6;">We received a request to reset your LocalLink password. Click below to create a new one.</p>
-          <div style="text-align:center;margin:40px 0;"><a href="${resetUrl}" style="display:inline-block;background:#0f766e;color:#ffffff;padding:16px 32px;text-decoration:none;border-radius:10px;font-weight:600;font-size:16px;">Reset Password</a></div>
-          <p style="color:#a8a29e;font-size:14px;">This link expires in 1 hour. If you didn't request this, ignore this email.</p>
-          </div></div>`,
+          html: `<div style="max-width:600px;margin:auto;padding:35px;font-family:Arial;background:#f5f0e8;">
+<div style="background:white;padding:35px;border-radius:15px;">
+<h1 style="color:#0f766e;text-align:center;">LocalLink</h1>
+<h2>Reset Your Password</h2>
+<p>Hi ${name},</p>
+<p>We received a request to reset your LocalLink password.</p>
+<div style="text-align:center;margin:35px;">
+<a href="${resetUrl}" style="background:#0f766e;color:white;padding:15px 25px;text-decoration:none;border-radius:8px;">Reset Password</a>
+</div>
+<p>This link expires in 1 hour. If you didn't request this, ignore this email.</p>
+</div></div>`,
         },
       );
     } catch (e) {
@@ -230,19 +268,28 @@ private async sendEmail(
     }
   }
 
+  // --------------------------------------------------
+  // Email: Password changed
+  // --------------------------------------------------
+
   async sendPasswordChangedEmail(email: string, name: string) {
     try {
       await this.sendEmail(
         email,
         'Your LocalLink password has been changed',
         {
-          html: `<h2 style="font-family:sans-serif">Password Changed</h2><p style="font-family:sans-serif">Hello ${name}, your LocalLink password was changed successfully.</p>`,
+          html: `<h2>Password Changed</h2>
+<p>Hello ${name}, your LocalLink password was changed successfully.</p>`,
         },
       );
     } catch (e) {
       this.logger.error('[Email Error] sendPasswordChangedEmail', e);
     }
   }
+
+  // --------------------------------------------------
+  // Email: Booking status
+  // --------------------------------------------------
 
   async sendBookingStatusUpdate(
     email: string,
@@ -262,6 +309,10 @@ private async sendEmail(
     }
   }
 
+  // --------------------------------------------------
+  // Email: New service request
+  // --------------------------------------------------
+
   async sendNewServiceRequestToProvider(
     email: string,
     providerName: string,
@@ -274,13 +325,25 @@ private async sendEmail(
         email,
         `New Service Request: ${requestDisplayId}`,
         {
-          text: `Hello ${providerName},\n\nYou have received a new service request:\n\nRequest ID: ${requestDisplayId}\nService: ${service}\nCustomer: ${customerName}\n\nPlease login to your dashboard to accept or reject this request.`,
+          text: `Hello ${providerName},
+
+You have received a new service request:
+
+Request ID: ${requestDisplayId}
+Service: ${service}
+Customer: ${customerName}
+
+Please login to your dashboard to accept or reject this request.`,
         },
       );
     } catch (e) {
       this.logger.error('[Email Error] sendNewServiceRequestToProvider', e);
     }
   }
+
+  // --------------------------------------------------
+  // Email: Provider response
+  // --------------------------------------------------
 
   async sendProviderResponseToUser(
     email: string,
@@ -294,13 +357,21 @@ private async sendEmail(
         email,
         `Request ${requestDisplayId} ${status}`,
         {
-          text: `Hello ${userName},\n\nYour service request ${requestDisplayId} has been ${status} by ${providerName}.\n\nPlease login to your dashboard to view details.`,
+          text: `Hello ${userName},
+
+Your service request ${requestDisplayId} has been ${status} by ${providerName}.
+
+Please login to your dashboard to view details.`,
         },
       );
     } catch (e) {
       this.logger.error('[Email Error] sendProviderResponseToUser', e);
     }
   }
+
+  // --------------------------------------------------
+  // Email: Service completed
+  // --------------------------------------------------
 
   async sendServiceCompletedToUser(
     email: string,
@@ -313,13 +384,21 @@ private async sendEmail(
         email,
         `Service Completed: ${requestDisplayId}`,
         {
-          text: `Hello ${userName},\n\nYour service request ${requestDisplayId} has been completed by ${providerName}.\n\nPlease login to your dashboard to make payment and leave a review.`,
+          text: `Hello ${userName},
+
+Your service request ${requestDisplayId} has been completed by ${providerName}.
+
+Please login to your dashboard to make payment and leave a review.`,
         },
       );
     } catch (e) {
       this.logger.error('[Email Error] sendServiceCompletedToUser', e);
     }
   }
+
+  // --------------------------------------------------
+  // Email: New message
+  // --------------------------------------------------
 
   async sendNewMessageNotification(
     email: string,
@@ -332,7 +411,11 @@ private async sendEmail(
         email,
         `New Message: ${requestDisplayId}`,
         {
-          text: `Hello ${userName},\n\nYou have received a new message from ${senderName} regarding request ${requestDisplayId}.\n\nPlease login to your dashboard to view and reply.`,
+          text: `Hello ${userName},
+
+You have received a new message from ${senderName} regarding request ${requestDisplayId}.
+
+Please login to your dashboard to view and reply.`,
         },
       );
     } catch (e) {
