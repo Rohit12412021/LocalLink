@@ -12,7 +12,15 @@ import { JwtService } from '@nestjs/jwt';
 
 @WebSocketGateway({
     cors: {
-        origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+        origin: (origin: string, callback: (err: Error | null, allow?: boolean) => void) => {
+            const allowed = [
+                process.env.CORS_ORIGIN,
+                'http://localhost:3000',
+                'http://localhost:3001',
+            ].filter(Boolean);
+            if (!origin || allowed.includes(origin)) return callback(null, true);
+            return callback(null, false);
+        },
         credentials: true,
     },
 })
@@ -58,6 +66,16 @@ export class SocketGateway implements OnGatewayConnection, OnGatewayDisconnect {
     ) {
         if (data?.requestId) {
             client.join(`request_${data.requestId}`);
+        }
+    }
+
+    @SubscribeMessage('typing')
+    handleTyping(
+        @ConnectedSocket() client: Socket,
+        @MessageBody() data: { requestId: string },
+    ) {
+        if (data?.requestId) {
+            client.to(`request_${data.requestId}`).emit('user_typing', { requestId: data.requestId });
         }
     }
 

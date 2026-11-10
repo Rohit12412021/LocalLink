@@ -41,11 +41,19 @@ export type CreateServiceRequestPayload = {
   longitude?: number;
 };
 
+export type ServiceSubItem = {
+  id: string;
+  name: string;
+  price: string;
+  description?: string | null;
+};
+
 export type ProviderService = {
   id?: string;
   name: string;
   price: string;
   description?: string;
+  subItems?: ServiceSubItem[];
 };
 
 export type Provider = {
@@ -146,12 +154,14 @@ export type CreateServicePayload = {
   name: string;
   price: string;
   description?: string;
+  subItems?: { name: string; price: string; description?: string | null }[];
 };
 
 export type UpdateServicePayload = {
   name?: string;
   price?: string;
   description?: string;
+  subItems?: { id?: string; name: string; price: string; description?: string | null }[];
 };
 
 export type UpdateProviderProfilePayload = {

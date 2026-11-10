@@ -55,29 +55,27 @@ export default function RequestDetailsPage({ params }: RequestDetailsPageProps) 
   const [submittingReview, setSubmittingReview] = useState(false);
 
   useEffect(() => {
+    // Resolve params (can be a Promise in Next 15 server components adapted to client)
     let alive = true;
     (async () => {
-      const { id } = await params;
+      const { id } = await Promise.resolve(params);
+      setRequestId(id);
+      if (!authLoading && !user) {
+        // Will show auth wall below, no need to fetch
+        if (alive) setLoading(false);
+        return;
+      }
       try {
         const data = await getRequestById(id);
-        if (alive) {
-          setRequest(data);
-          setRequestId(data.id);
-        }
+        if (alive) { setRequest(data); }
       } catch (err) {
-        if (alive) {
-          setError(
-            err instanceof ApiError ? err.message : "Unable to load this booking.",
-          );
-        }
+        if (alive) setError(err instanceof ApiError ? err.message : "Unable to load this booking.");
       } finally {
         if (alive) setLoading(false);
       }
     })();
-    return () => {
-      alive = false;
-    };
-  }, [params]);
+    return () => { alive = false; };
+  }, [params, user, authLoading]);
 
   async function handleStatusChange(status: "Accepted" | "Rejected" | "Cancelled" | "Completed") {
     if (!request) return;
@@ -216,9 +214,21 @@ export default function RequestDetailsPage({ params }: RequestDetailsPageProps) 
   const isProvider = user?.role === "Provider";
   const canChat = !!user;
 
-  if (loading) {
+  // Auth wall — do not expose booking data to unauthenticated users
+  if (!authLoading && !user) {
     return (
-      <main className="mx-auto min-h-[calc(100vh-4rem)] w-full max-w-3xl px-4 py-10">
+      <main className="flex min-h-[calc(100vh-4rem)] items-center justify-center px-4">
+        <div className="card w-full max-w-md p-8 text-center">
+          <h1 className="text-xl font-extrabold text-ink">Sign in required</h1>
+          <p className="mt-2 text-sm text-ink-mute">Please sign in to view booking details.</p>
+          <Link href={`/login?returnUrl=/request/${requestId}`} className="btn btn-brand mt-5 w-full">Sign in</Link>
+        </div>
+      </main>
+    );
+  }
+
+  if (loading || authLoading) {
+    return (      <main className="mx-auto min-h-[calc(100vh-4rem)] w-full max-w-3xl px-4 py-10">
         <div className="skeleton h-6 w-40" />
         <div className="skeleton mt-6 h-24" />
         <div className="skeleton mt-4 h-56" />

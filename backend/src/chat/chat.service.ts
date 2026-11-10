@@ -55,12 +55,20 @@ export class ChatService {
       relations: ['sender'] // Load sender information
     });
 
-    // Mark messages as read if userId is provided and they're not the sender
+    // Bulk-update unread messages in one query instead of N+1
     if (userId) {
-      const unreadMessages = messages.filter(m => m.senderId !== userId && !m.isRead);
-      for (const msg of unreadMessages) {
-        msg.isRead = true;
-        await this.messagesRepo.save(msg);
+      const unreadIds = messages
+        .filter(m => m.senderId !== userId && !m.isRead)
+        .map(m => m.id);
+      if (unreadIds.length > 0) {
+        await this.messagesRepo
+          .createQueryBuilder()
+          .update()
+          .set({ isRead: true })
+          .where('id IN (:...ids)', { ids: unreadIds })
+          .execute();
+        // Reflect in the already-loaded objects
+        messages.forEach(m => { if (unreadIds.includes(m.id)) m.isRead = true; });
       }
     }
 
@@ -204,6 +212,7 @@ export class ChatService {
 
     await this.assertParticipant(request, userId);
 
+    // Bulk-update in one query
     const unreadMessages = await this.messagesRepo
       .createQueryBuilder('message')
       .where('message.requestId = :requestId', { requestId: request.id })
@@ -211,9 +220,13 @@ export class ChatService {
       .andWhere('message.isRead = :isRead', { isRead: false })
       .getMany();
 
-    for (const msg of unreadMessages) {
-      msg.isRead = true;
-      await this.messagesRepo.save(msg);
+    if (unreadMessages.length > 0) {
+      await this.messagesRepo
+        .createQueryBuilder()
+        .update()
+        .set({ isRead: true })
+        .where('id IN (:...ids)', { ids: unreadMessages.map(m => m.id) })
+        .execute();
     }
 
     return { marked: unreadMessages.length };

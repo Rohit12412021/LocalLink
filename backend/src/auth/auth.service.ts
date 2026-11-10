@@ -81,11 +81,12 @@ export class AuthService {
     });
     await this.usersRepo.save(user);
 
-    await this.notificationsService.sendVerificationEmail(
+    // Fire-and-forget — don't block registration if email fails
+    this.notificationsService.sendVerificationEmail(
       user.email,
       user.name,
       emailVerificationToken,
-    );
+    ).catch(err => console.error('[Auth] Failed to send verification email:', err));
 
     let providerId: string | null = null;
 

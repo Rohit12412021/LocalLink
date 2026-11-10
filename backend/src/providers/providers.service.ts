@@ -79,6 +79,7 @@ export class ProvidersService {
         name: s.name,
         price: s.price,
         description: s.description,
+        subItems: s.subItems || [],
       })),
     };
   }
@@ -196,6 +197,7 @@ export class ProvidersService {
     if (dto.latitude !== undefined) provider.latitude = dto.latitude;
     if (dto.longitude !== undefined) provider.longitude = dto.longitude;
     if (dto.experience !== undefined) provider.experience = dto.experience.trim();
+    if (dto.category !== undefined) provider.category = dto.category.trim();
 
     await this.providersRepo.save(provider);
     return this.getProviderById(provider.id);
@@ -203,10 +205,19 @@ export class ProvidersService {
 
   async createService(userId: string, dto: CreateServiceDto): Promise<ProviderDto> {
     const provider = await this.findByUserId(userId);
+    const { v4: uuidv4 } = await import('uuid');
     const service = this.servicesRepo.create({
       name: dto.name.trim(),
       price: dto.price.trim(),
       description: dto.description?.trim() || null,
+      subItems: dto.subItems
+        ? dto.subItems.map(s => ({
+            id: s.id || uuidv4(),
+            name: s.name.trim(),
+            price: s.price.trim(),
+            description: s.description?.trim() || null,
+          }))
+        : null,
       providerId: provider.id,
     });
     await this.servicesRepo.save(service);
@@ -224,6 +235,7 @@ export class ProvidersService {
     serviceId: string,
     dto: UpdateServiceDto,
   ): Promise<ProviderDto> {
+    const { v4: uuidv4 } = await import('uuid');
     const provider = await this.findByUserId(userId);
     const service = await this.servicesRepo.findOne({ where: { id: serviceId } });
     if (!service || service.providerId !== provider.id) {
@@ -231,8 +243,14 @@ export class ProvidersService {
     }
     if (dto.name !== undefined) service.name = dto.name.trim();
     if (dto.price !== undefined) service.price = dto.price.trim();
-    if (dto.description !== undefined) {
-      service.description = dto.description.trim();
+    if (dto.description !== undefined) service.description = dto.description.trim();
+    if (dto.subItems !== undefined) {
+      service.subItems = dto.subItems.map(s => ({
+        id: s.id || uuidv4(),
+        name: s.name.trim(),
+        price: s.price.trim(),
+        description: s.description?.trim() || null,
+      }));
     }
     await this.servicesRepo.save(service);
     return this.getProviderById(provider.id);

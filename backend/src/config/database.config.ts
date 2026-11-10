@@ -1,17 +1,8 @@
 import { config as loadEnv } from 'dotenv';
 import { TypeOrmModuleOptions } from '@nestjs/typeorm';
 
-// Load backend/.env before TypeORM config is evaluated
 loadEnv();
 
-/**
- * PostgreSQL only.
- *
- * Paste your connection string in backend/.env:
- *   DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
- *
- * Or use separate DATABASE_HOST / DATABASE_USERNAME / etc.
- */
 export function assertPostgresConfigured(): void {
   if (!hasPostgresConfig()) {
     throw new Error(
@@ -25,7 +16,6 @@ export function assertPostgresConfigured(): void {
         '  3. Restart: npm run start:dev',
         '',
         '  Free hosts: Neon, Supabase, Railway, or local Postgres.',
-        '  See backend/.env.example for the full template.',
         '══════════════════════════════════════════════════════════════',
         '',
       ].join('\n'),
@@ -46,25 +36,25 @@ export function getTypeOrmConfig(): TypeOrmModuleOptions {
 
   const isProd = process.env.NODE_ENV === 'production';
 
-  // In production: allow DATABASE_SYNC=true to force sync (useful for initial deploy)
-  // In development: sync unless explicitly disabled
-  const sync =
-    process.env.DATABASE_SYNC === 'true' ||
-    (!isProd && process.env.DATABASE_SYNC !== 'false');
+  // Always sync unless explicitly set to false.
+  // This ensures tables are created/updated on Render on every deploy.
+  const sync = process.env.DATABASE_SYNC !== 'false';
 
-  // Render and most cloud Postgres providers require SSL
+  // Auto-detect SSL for cloud providers (Render, Neon, Supabase, Railway)
+  const url = process.env.DATABASE_URL ?? '';
   const ssl =
     process.env.DATABASE_SSL === 'true' ||
     isProd ||
-    process.env.DATABASE_URL?.includes('sslmode=require') ||
-    process.env.DATABASE_URL?.includes('render.com') ||
-    process.env.DATABASE_URL?.includes('neon.tech') ||
-    process.env.DATABASE_URL?.includes('supabase.co');
+    url.includes('sslmode=require') ||
+    url.includes('render.com') ||
+    url.includes('neon.tech') ||
+    url.includes('supabase.co') ||
+    url.includes('railway.app');
 
-  if (process.env.DATABASE_URL) {
+  if (url) {
     return {
       type: 'postgres',
-      url: process.env.DATABASE_URL,
+      url,
       autoLoadEntities: true,
       synchronize: sync,
       ssl: ssl ? { rejectUnauthorized: false } : undefined,
@@ -86,8 +76,6 @@ export function getTypeOrmConfig(): TypeOrmModuleOptions {
 }
 
 export function getDatabaseModeLabel(): string {
-  if (process.env.DATABASE_URL) {
-    return 'PostgreSQL (DATABASE_URL)';
-  }
+  if (process.env.DATABASE_URL) return 'PostgreSQL (DATABASE_URL)';
   return 'PostgreSQL (DATABASE_HOST fields)';
 }

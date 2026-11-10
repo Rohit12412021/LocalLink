@@ -20,6 +20,7 @@ import {
   verifyEmail as apiVerifyEmail,
 } from "@/lib/api";
 import { clearToken, getToken, setToken } from "@/lib/auth-storage";
+import { refreshSocketToken, disconnectSocket } from "@/lib/socket";
 import type {
   AuthUser,
   LoginPayload,
@@ -97,6 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(response.accessToken);
       setTokenState(response.accessToken);
       setUser(response.user);
+      refreshSocketToken();
       return response.user;
     } catch (err) {
       if (err instanceof ApiError) {
@@ -156,6 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearToken();
     setUser(null);
     setTokenState(null);
+    disconnectSocket();
   }, []);
 
   const updateMe = useCallback(
@@ -191,6 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const me = await getMe();
       setUser(me);
+      refreshSocketToken();
       return me;
     } catch (err) {
       clearToken();

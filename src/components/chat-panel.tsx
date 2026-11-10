@@ -154,7 +154,7 @@ export default function ChatPanel({
         <div className="flex items-center gap-3">
           <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/20 font-extrabold text-white">
             {chatPartnerName.charAt(0).toUpperCase()}
-            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-brand bg-emerald-400" />
+            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-brand bg-success" />
           </span>
           <div>
             <p className="font-bold text-white">{chatPartnerName}</p>
@@ -200,7 +200,7 @@ export default function ChatPanel({
                     }`}
                   >
                     <p className="break-words text-sm leading-relaxed">{msg.content}</p>
-                    <p className={`mt-1 text-[11px] ${isMe ? "text-teal-100" : "text-ink-faint"}`}>
+                    <p className={`mt-1 text-[11px] ${isMe ? "text-white/70" : "text-ink-faint"}`}>
                       {new Date(msg.createdAt).toLocaleTimeString([], {
                         hour: "2-digit",
                         minute: "2-digit",

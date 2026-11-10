@@ -6,7 +6,31 @@ import {
   IsString,
   MaxLength,
   MinLength,
+  IsArray,
+  ValidateNested,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class ServiceSubItemDto {
+  @IsOptional()
+  @IsString()
+  id?: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(160)
+  name: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(80)
+  price: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  description?: string | null;
+}
 
 export class UpdateProviderProfileDto {
   @IsOptional()
@@ -50,6 +74,11 @@ export class UpdateProviderProfileDto {
   @IsString()
   @MaxLength(40)
   experience?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  category?: string;
 }
 
 export class CreateServiceDto {
@@ -67,6 +96,12 @@ export class CreateServiceDto {
   @IsString()
   @MaxLength(1000)
   description?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ServiceSubItemDto)
+  subItems?: ServiceSubItemDto[];
 }
 
 export class UpdateServiceDto {
@@ -86,4 +121,10 @@ export class UpdateServiceDto {
   @IsString()
   @MaxLength(1000)
   description?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ServiceSubItemDto)
+  subItems?: ServiceSubItemDto[];
 }
