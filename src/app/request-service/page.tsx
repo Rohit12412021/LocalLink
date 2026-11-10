@@ -11,19 +11,6 @@ import { useAuth } from "@/context/auth-context";
 import { ApiError, createRequest, getProviderById, suggestPrice } from "@/lib/api";
 import type { AuthUser, Provider } from "@/types";
 
-const SERVICE_CATEGORIES = [
-  "Electrician",
-  "Plumber",
-  "Carpenter",
-  "AC Repair",
-  "Car Repair",
-  "Cleaning",
-  "Painting",
-  "Appliance Repair",
-  "Pest Control",
-  "Home Tutor",
-];
-
 function RequestForm({
   provider,
   user,
@@ -34,8 +21,6 @@ function RequestForm({
   const router = useRouter();
 
   const [service, setService] = useState("");
-  const [category, setCategory] = useState(provider.category);
-  const [customCategory, setCustomCategory] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
@@ -45,48 +30,29 @@ function RequestForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const requestCategory =
-    category === "Other" ? customCategory.trim() : category;
-
-  const categoryOptions = Array.from(
-    new Set([...SERVICE_CATEGORIES, provider.category]),
-  ).filter(Boolean);
-
-  const selectedService = provider.services.find(
-    (item) => item.name === service,
-  );
+  const selectedService = provider.services.find((item) => item.name === service);
 
   useEffect(() => {
-    if (!service || !requestCategory) return;
+    if (!service) return;
     let cancelled = false;
     (async () => {
       try {
-        const result = await suggestPrice(requestCategory, service);
+        const result = await suggestPrice(provider.category, service);
         if (cancelled) return;
         setPriceHint(
-          result.suggestedPrice ||
-            result.price ||
-            (result.min && result.max
-              ? `₹${result.min} – ₹${result.max}`
-              : ""),
+          result.suggestedPrice || result.price ||
+            (result.min && result.max ? `₹${result.min} – ₹${result.max}` : ""),
         );
       } catch {
         if (!cancelled) setPriceHint("");
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [requestCategory, service]);
+    return () => { cancelled = true; };
+  }, [provider.category, service]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
-
-    if (!requestCategory) {
-      setError("Please select or enter a request category.");
-      return;
-    }
 
     if (!service) {
       setError("Please select a service.");
@@ -114,7 +80,7 @@ function RequestForm({
       const newRequest = await createRequest({
         providerId: provider.id,
         providerName: provider.name,
-        category: requestCategory,
+        category: provider.category,
         service,
         description: description.trim(),
         date,
@@ -184,36 +150,6 @@ function RequestForm({
       ) : null}
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-6">
-
-        {/* Category selection */}
-        <section className="card p-6">
-          <h2 className="text-lg font-bold text-ink">
-            Select request category
-          </h2>
-
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="input mt-4"
-          >
-            {categoryOptions.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-            <option value="Other">Other</option>
-          </select>
-
-          {category === "Other" && (
-            <input
-              type="text"
-              value={customCategory}
-              onChange={(e) => setCustomCategory(e.target.value)}
-              placeholder="Enter your custom category"
-              className="input mt-4"
-            />
-          )}
-        </section>
 
         {/* Service selection */}
         <section className="card p-6">

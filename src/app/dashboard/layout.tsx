@@ -20,7 +20,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
           <Link
             href="/home"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-line bg-white text-ink hover:bg-slate-50 transition"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-ink hover:bg-surface-soft transition"
             aria-label="Back to home"
           >
             <ArrowLeft size={16} />
