@@ -45,7 +45,9 @@ export function getTypeOrmConfig(): TypeOrmModuleOptions {
   assertPostgresConfigured();
 
   const isProd = process.env.NODE_ENV === 'production';
-  const sync = !isProd && process.env.DATABASE_SYNC !== 'false';
+ const sync =
+  process.env.DATABASE_SYNC === 'true' ||
+  (!isProd && process.env.DATABASE_SYNC !== 'false');
   const ssl =
     process.env.DATABASE_SSL === 'true' ||
     process.env.DATABASE_URL?.includes('sslmode=require');
