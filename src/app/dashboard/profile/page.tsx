@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { categories } from "@/data/categories";
 import { motion } from "framer-motion";
 import {
   Camera, MapPin, Briefcase, Star, Shield, Award,
@@ -23,7 +24,7 @@ export default function ProviderProfilePage() {
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState({
     name: "", about: "", phone: "", whatsapp: "",
-    location: "", experience: "", available: true,
+    location: "", experience: "", available: true, category: "",
   });
 
   useEffect(() => {
@@ -46,6 +47,7 @@ export default function ProviderProfilePage() {
         name: data.name, about: data.about || "", phone: data.phone || "",
         whatsapp: data.whatsapp || "", location: data.location,
         experience: data.experience || "", available: data.available,
+        category: data.category || "",
       });
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -188,6 +190,20 @@ export default function ProviderProfilePage() {
         {editMode && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-8 border-t border-line pt-8">
             <div className="grid gap-5 md:grid-cols-2">
+              {/* Category dropdown */}
+              <div className="md:col-span-2">
+                <label className="label">Service Category</label>
+                <select
+                  value={formData.category}
+                  onChange={e => setFormData({ ...formData, category: e.target.value })}
+                  className="input"
+                >
+                  <option value="">Select category</option>
+                  {categories.map(c => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
               {[
                 { label: "Business Name", key: "name", type: "text" },
                 { label: "Phone Number", key: "phone", type: "tel" },

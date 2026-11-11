@@ -6,14 +6,12 @@ type CategoryCardProps = {
   icon: React.ElementType;
 };
 
-export default function CategoryCard({
-  name,
-  description,
-  icon: Icon,
-}: CategoryCardProps) {
+export default function CategoryCard({ name, description, icon: Icon }: CategoryCardProps) {
+  // Send exact category name so the API can match it directly
+  // e.g. "Car Repair" → ?category=Car+Repair (not car-repair slug)
   return (
     <Link
-      href={`/search?category=${name.toLowerCase().replace(/\s+/g, "-")}`}
+      href={`/search?category=${encodeURIComponent(name)}`}
       className="card card-hover group block p-5 text-left"
     >
       <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-soft text-brand transition-colors group-hover:bg-brand group-hover:text-white">

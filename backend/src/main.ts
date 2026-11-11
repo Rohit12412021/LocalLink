@@ -1,19 +1,57 @@
 import { config as loadEnv } from 'dotenv';
 loadEnv();
 
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { DataSource } from 'typeorm';
 import { AppModule } from './app.module';
 import { getDatabaseModeLabel } from './config/database.config';
 import helmet from 'helmet';
 import * as path from 'path';
 
+const logger = new Logger('Bootstrap');
+
+/** Safe migrations — add columns that might be missing on production DB */
+async function runSafeMigrations(dataSource: DataSource) {
+  try {
+    // Add subItems JSONB column to services if not present
+    await dataSource.query(`
+      ALTER TABLE services ADD COLUMN IF NOT EXISTS "subItems" jsonb DEFAULT NULL;
+    `);
+    // Add avatarUrl to providers if not present (older deployments may miss it)
+    await dataSource.query(`
+      ALTER TABLE providers ADD COLUMN IF NOT EXISTS "avatarUrl" varchar(500) DEFAULT NULL;
+    `);
+    // Add gallery column if not present
+    await dataSource.query(`
+      ALTER TABLE providers ADD COLUMN IF NOT EXISTS gallery text DEFAULT '';
+    `).catch(() => {}); // ignore if column type conflicts
+    logger.log('[Migration] Safe column additions completed');
+  } catch (err) {
+    logger.warn(`[Migration] Safe migration warning (non-fatal): ${(err as Error).message}`);
+  }
+}
+
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.use(helmet());
 
+  // Run safe migrations before accepting traffic
+  try {
+    const dataSource = app.get(DataSource);
+    if (dataSource.isInitialized) {
+      await runSafeMigrations(dataSource);
+    }
+  } catch (err) {
+    logger.warn(`[Migration] Could not run migrations: ${(err as Error).message}`);
+  }
+
   app.useStaticAssets(path.join(process.cwd(), 'public'), {
+    prefix: '/uploads',
+    maxAge: '7d',
+    fallthrough: true,
+  });
     prefix: '/uploads',
     maxAge: '7d',
     fallthrough: true,

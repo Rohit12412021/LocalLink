@@ -17,8 +17,9 @@ import type { Provider } from "@/types";
 function SearchPageContent() {
   const searchParams = useSearchParams();
 
-  const query = searchParams.get("q")?.toLowerCase().trim() || "";
-  const category = searchParams.get("category")?.toLowerCase().trim() || "";
+  // Keep original case from URL param — backend normalizes both sides
+  const query = searchParams.get("q")?.trim() || "";
+  const category = searchParams.get("category")?.trim() || "";
   const filter = searchParams.get("filter") || "all";
 
   const [providers, setProviders] = useState<Provider[]>([]);

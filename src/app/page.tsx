@@ -207,7 +207,7 @@ export default function Page() {
                 whileHover={{ y: -8, scale: 1.04 }}
                 whileTap={{ scale: 0.96 }}
               >
-                <Link href={`/search?category=${label.toLowerCase()}`} className={`flex flex-col items-center gap-3 rounded-2xl border border-line/50 ${bg} p-5 text-center transition-all duration-300 hover:border-brand/40 hover:shadow-[0_8px_30px_-8px_rgba(26,115,232,0.2)] shimmer-overlay`}>
+                <Link href={`/search?category=${encodeURIComponent(label)}`} className={`flex flex-col items-center gap-3 rounded-2xl border border-line/50 ${bg} p-5 text-center transition-all duration-300 hover:border-brand/40 hover:shadow-[0_8px_30px_-8px_rgba(26,115,232,0.2)] shimmer-overlay`}>
                   <div className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${color} text-white shadow-lg`}>
                     <Icon size={24} />
                   </div>

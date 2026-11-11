@@ -96,24 +96,32 @@ export default function DashboardPage() {
 
   async function handleAddService(e: FormEvent) {
     e.preventDefault();
-    if (!serviceName.trim() || !servicePrice.trim()) return;
+    const name = serviceName.trim();
+    const price = servicePrice.trim();
+    if (!name || !price || addingService) return; // Guard double-submit
+
+    setAddingService(true);
+    setError(""); // Clear previous error
     try {
-      setAddingService(true);
       const validSubs = subItems.filter(s => s.name.trim() && s.price.trim());
       const updated = await createService({
-        name: serviceName.trim(),
-        price: servicePrice.trim(),
+        name,
+        price,
         description: serviceDesc.trim() || undefined,
         subItems: validSubs.length > 0
           ? validSubs.map(s => ({ name: s.name.trim(), price: s.price.trim(), description: s.description.trim() || undefined }))
           : undefined,
       });
       setProfile(updated);
+      // Clear form ONLY on success
       setServiceName(""); setServicePrice(""); setServiceDesc("");
       setSubItems([]); setShowSubForm(false);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Unable to add service.");
-    } finally { setAddingService(false); }
+      const msg = err instanceof ApiError ? err.message : "Unable to add service. Please try again.";
+      setError(msg);
+    } finally {
+      setAddingService(false);
+    }
   }
 
   async function handleDeleteService(service: ProviderService) {
@@ -201,14 +209,14 @@ export default function DashboardPage() {
         </div>
 
         {/* Add service form */}
-        <motion.form onSubmit={handleAddService} className="mt-6 rounded-xl border border-dashed border-brand/30 bg-brand-soft/20 p-4">
+        <motion.form onSubmit={handleAddService} autoComplete="off" className="mt-6 rounded-xl border border-dashed border-brand/30 bg-brand-soft/20 p-4">
           <p className="text-sm font-semibold text-ink">Add a service</p>
           <div className="mt-3 grid gap-3 sm:grid-cols-3">
-            <input type="text" placeholder="Service name *" required value={serviceName}
+            <input type="text" placeholder="Service name *" required value={serviceName} disabled={addingService}
               onChange={e => setServiceName(e.target.value)} className="input text-sm" />
-            <input type="text" placeholder="Starting price *  e.g. ₹500" required value={servicePrice}
+            <input type="text" placeholder="Starting price * e.g. ₹500" required value={servicePrice} disabled={addingService}
               onChange={e => setServicePrice(e.target.value)} className="input text-sm" />
-            <input type="text" placeholder="Short description" value={serviceDesc}
+            <input type="text" placeholder="Short description" value={serviceDesc} disabled={addingService}
               onChange={e => setServiceDesc(e.target.value)} className="input text-sm" />
           </div>
 
