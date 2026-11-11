@@ -80,6 +80,7 @@ export class ProvidersService {
         name: s.name,
         price: s.price,
         description: s.description,
+        category: (s as any).category || null,
         subItems: (s as any).subItems || [],
       })),
     };
@@ -228,6 +229,7 @@ export class ProvidersService {
       name: dto.name.trim(),
       price: dto.price.trim(),
       description: dto.description?.trim() || null,
+      category: dto.category?.trim() || null,
       providerId: provider.id,
     };
 
@@ -275,6 +277,7 @@ export class ProvidersService {
     if (dto.name !== undefined) service.name = dto.name.trim();
     if (dto.price !== undefined) service.price = dto.price.trim();
     if (dto.description !== undefined) service.description = dto.description.trim();
+    if (dto.category !== undefined) service.category = dto.category.trim() || null;
     if (dto.subItems !== undefined) {
       service.subItems = dto.subItems.map(s => ({
         id: s.id || uuidv4(),

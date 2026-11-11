@@ -97,6 +97,12 @@ export class CreateServiceDto {
   @MaxLength(1000)
   description?: string;
 
+  /** Service-level category (optional — falls back to provider category) */
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  category?: string;
+
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
@@ -121,6 +127,11 @@ export class UpdateServiceDto {
   @IsString()
   @MaxLength(1000)
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  category?: string;
 
   @IsOptional()
   @IsArray()

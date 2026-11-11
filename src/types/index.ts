@@ -53,6 +53,7 @@ export type ProviderService = {
   name: string;
   price: string;
   description?: string;
+  category?: string | null;
   subItems?: ServiceSubItem[];
 };
 
@@ -154,6 +155,7 @@ export type CreateServicePayload = {
   name: string;
   price: string;
   description?: string;
+  category?: string;
   subItems?: { name: string; price: string; description?: string | null }[];
 };
 

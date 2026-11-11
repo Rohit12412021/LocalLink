@@ -14,6 +14,7 @@ import {
   ApiError, createService, deleteService,
   getMyProviderProfile, getProviderInbox, updateMyProviderProfile,
 } from "@/lib/api";
+import { categories } from "@/data/categories";
 import type { Provider, ProviderService, ServiceRequest, ServiceSubItem } from "@/types";
 
 type SubItemDraft = { name: string; price: string; description: string };
@@ -31,6 +32,7 @@ export default function DashboardPage() {
   const [serviceName, setServiceName] = useState("");
   const [servicePrice, setServicePrice] = useState("");
   const [serviceDesc, setServiceDesc] = useState("");
+  const [serviceCategory, setServiceCategory] = useState("");
   const [subItems, setSubItems] = useState<SubItemDraft[]>([]);
   const [showSubForm, setShowSubForm] = useState(false);
   const [addingService, setAddingService] = useState(false);
@@ -108,6 +110,7 @@ export default function DashboardPage() {
         name,
         price,
         description: serviceDesc.trim() || undefined,
+        category: serviceCategory || undefined,
         subItems: validSubs.length > 0
           ? validSubs.map(s => ({ name: s.name.trim(), price: s.price.trim(), description: s.description.trim() || undefined }))
           : undefined,
@@ -115,7 +118,7 @@ export default function DashboardPage() {
       setProfile(updated);
       // Clear form ONLY on success
       setServiceName(""); setServicePrice(""); setServiceDesc("");
-      setSubItems([]); setShowSubForm(false);
+      setServiceCategory(""); setSubItems([]); setShowSubForm(false);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Unable to add service. Please try again.";
       setError(msg);
@@ -211,11 +214,16 @@ export default function DashboardPage() {
         {/* Add service form */}
         <motion.form onSubmit={handleAddService} autoComplete="off" className="mt-6 rounded-xl border border-dashed border-brand/30 bg-brand-soft/20 p-4">
           <p className="text-sm font-semibold text-ink">Add a service</p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <input type="text" placeholder="Service name *" required value={serviceName} disabled={addingService}
               onChange={e => setServiceName(e.target.value)} className="input text-sm" />
             <input type="text" placeholder="Starting price * e.g. ₹500" required value={servicePrice} disabled={addingService}
               onChange={e => setServicePrice(e.target.value)} className="input text-sm" />
+            <select value={serviceCategory} onChange={e => setServiceCategory(e.target.value)}
+              disabled={addingService} className="input text-sm">
+              <option value="">Category (defaults to yours)</option>
+              {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+            </select>
             <input type="text" placeholder="Short description" value={serviceDesc} disabled={addingService}
               onChange={e => setServiceDesc(e.target.value)} className="input text-sm" />
           </div>
@@ -274,8 +282,11 @@ export default function DashboardPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-semibold text-ink">{service.name}</p>
+                      {service.category && (
+                        <span className="badge badge-brand text-[10px]">{service.category}</span>
+                      )}
                       {(service.subItems?.length ?? 0) > 0 && (
-                        <span className="badge badge-brand text-[10px]">{service.subItems!.length} options</span>
+                        <span className="badge badge-info text-[10px]">{service.subItems!.length} options</span>
                       )}
                     </div>
                     <p className="text-sm font-medium text-brand">{service.price}</p>

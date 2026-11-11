@@ -7,114 +7,69 @@ import { useSearchParams } from "next/navigation";
 
 import SearchHeader from "@/components/search/search-header";
 import SearchFilters from "@/components/search/search-filters";
-import { ProviderCard } from "@/components/provider/provider-card";
-import { ProviderCardSkeleton } from "@/components/provider/provider-card-skeleton";
+import { ServiceCard, ServiceCardSkeleton } from "@/components/provider/service-card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { ApiError, getProviders } from "@/lib/api";
-import { detectUserLocation } from "@/lib/location";
-import type { Provider } from "@/types";
+import { ApiError, getServices } from "@/lib/api";
+import type { ServiceListing } from "@/lib/api";
 
 function SearchPageContent() {
   const searchParams = useSearchParams();
 
-  // Keep original case from URL param — backend normalizes both sides
+  // Keep exact case — backend normalizes both sides
   const query = searchParams.get("q")?.trim() || "";
   const category = searchParams.get("category")?.trim() || "";
   const filter = searchParams.get("filter") || "all";
 
-  const [providers, setProviders] = useState<Provider[]>([]);
+  const [services, setServices] = useState<ServiceListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [locationLabel, setLocationLabel] = useState("Detecting location...");
 
   useEffect(() => {
     let alive = true;
+    setLoading(true);
     (async () => {
       try {
-        const loc = await detectUserLocation();
-        const sort =
-          filter === "nearest"
-            ? "distance"
-            : filter === "top-rated"
-              ? "rating"
-              : filter === "low-price"
-                ? "price"
-                : "smart";
-        const data = await getProviders({
-          lat: loc.lat,
-          lng: loc.lng,
-          q: query || undefined,
+        // Pass both q and category to the backend
+        const data = await getServices({
           category: category || undefined,
-          sort,
+          q: query || undefined,
         });
         if (!alive) return;
-        setLocationLabel(loc.label);
-        setProviders(data);
+        setServices(data);
       } catch (err) {
         if (!alive) return;
-        setError(
-          err instanceof ApiError ? err.message : "Unable to load providers.",
-        );
+        setError(err instanceof ApiError ? err.message : "Unable to load services.");
       } finally {
         if (alive) setLoading(false);
       }
     })();
-    return () => {
-      alive = false;
-    };
-  }, [query, category, filter]);
+    return () => { alive = false; };
+  }, [query, category]);
 
-  const filteredProviders = useMemo(() => {
-    return providers.filter((provider) => {
-      const matchesQuery =
-        !query ||
-        provider.name.toLowerCase().includes(query) ||
-        provider.category.toLowerCase().includes(query) ||
-        provider.location.toLowerCase().includes(query) ||
-        provider.services.some((service) =>
-          service.name.toLowerCase().includes(query),
-        );
-
-      const normalize = (s: string) => s.toLowerCase().replace(/[\s-_]+/g, '');
-      const matchesCategory =
-        !category || normalize(provider.category) === normalize(category);
-
-      let matchesFilter = true;
-
-      if (filter === "available") {
-        matchesFilter = provider.available === true;
-      }
-
-      if (filter === "top-rated") {
-        matchesFilter = provider.rating >= 4.5;
-      }
-
-      if (filter === "nearest") {
-        const distance = parseFloat(provider.distance);
-        matchesFilter = !Number.isNaN(distance) && distance <= 5;
-      }
-
+  // Client-side filter for available/top-rated/low-price
+  const filteredServices = useMemo(() => {
+    return services.filter((svc) => {
+      if (filter === "available") return svc.provider.available;
+      if (filter === "top-rated") return svc.provider.rating >= 4.5;
       if (filter === "low-price") {
-        matchesFilter = provider.services.some((service) => {
-          const price = parseFloat(service.price.replace(/[^\d.]/g, ""));
-          return !Number.isNaN(price) && price <= 500;
-        });
+        const price = parseFloat(svc.price.replace(/[^\d.]/g, ""));
+        return !isNaN(price) && price <= 500;
       }
-
-      return matchesQuery && matchesCategory && matchesFilter;
+      if (filter === "nearest") {
+        const dist = parseFloat(svc.provider.distance);
+        return !isNaN(dist) && dist <= 5;
+      }
+      return true;
     });
-  }, [providers, query, category, filter]);
+  }, [services, filter]);
 
   const searchText = query || category;
 
   return (
     <main className="mx-auto min-h-screen w-full max-w-7xl px-4 py-8">
       <div className="flex items-center gap-3">
-        <Link
-          href="/home"
-          aria-label="Back to home"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line bg-surface text-ink-mute transition-colors hover:border-brand hover:text-brand"
-        >
+        <Link href="/home" aria-label="Back to home"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-line bg-surface text-ink-mute transition-colors hover:border-brand hover:text-brand">
           <ArrowLeft size={19} />
         </Link>
         <SearchHeader />
@@ -122,7 +77,11 @@ function SearchPageContent() {
 
       <div className="mt-5 flex animate-fade-in-up items-center gap-2 text-sm text-ink-mute [animation-delay:80ms]">
         <MapPin size={15} className="text-brand" />
-        Searching near <span className="font-semibold text-ink">{locationLabel}</span>
+        {category ? (
+          <span>Showing all <span className="font-semibold text-ink">{category}</span> services</span>
+        ) : (
+          <span>Searching <span className="font-semibold text-ink">all services</span></span>
+        )}
       </div>
 
       <section className="mt-4 animate-fade-in-up [animation-delay:140ms]">
@@ -133,61 +92,32 @@ function SearchPageContent() {
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-extrabold tracking-tight text-ink">
-              {searchText
-                ? `Results for "${searchText}"`
-                : "All services near you"}
+              {searchText ? `Results for "${searchText}"` : "All services"}
             </h1>
             <p className="mt-1 text-sm text-ink-mute">
-              {loading
-                ? "Loading providers..."
-                : `${filteredProviders.length} provider${
-                    filteredProviders.length === 1 ? "" : "s"
-                  } found`}
+              {loading ? "Loading..." : `${filteredServices.length} service${filteredServices.length === 1 ? "" : "s"} found`}
             </p>
           </div>
         </div>
 
         {loading ? (
           <div className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <ProviderCardSkeleton key={i} />
-            ))}
+            {Array.from({ length: 6 }).map((_, i) => <ServiceCardSkeleton key={i} />)}
           </div>
         ) : error ? (
           <div className="mt-6">
-            <EmptyState
-              variant="offline"
-              title="Could not load providers"
-              description={error}
-              action={
-                <button
-                  type="button"
-                  onClick={() => window.location.reload()}
-                  className="btn btn-brand btn-sm"
-                >
-                  Try again
-                </button>
-              }
-            />
+            <EmptyState variant="offline" title="Could not load services" description={error}
+              action={<button type="button" onClick={() => window.location.reload()} className="btn btn-brand btn-sm">Try again</button>} />
           </div>
-        ) : filteredProviders.length > 0 ? (
+        ) : filteredServices.length > 0 ? (
           <div className="mt-6 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {filteredProviders.map((provider) => (
-              <ProviderCard key={provider.id} provider={provider} />
-            ))}
+            {filteredServices.map((svc) => <ServiceCard key={svc.serviceId} service={svc} />)}
           </div>
         ) : (
           <div className="mt-6">
-            <EmptyState
-              variant="search"
-              title="No providers found"
-              description="Try a different search term, category, or one of the filters above."
-              action={
-                <Link href="/search" className="btn btn-outline btn-sm">
-                  View all services
-                </Link>
-              }
-            />
+            <EmptyState variant="search" title="No services found"
+              description="Try a different search term, category, or filter."
+              action={<Link href="/search" className="btn btn-outline btn-sm">View all services</Link>} />
           </div>
         )}
       </section>
@@ -197,13 +127,7 @@ function SearchPageContent() {
 
 export default function SearchPage() {
   return (
-    <Suspense
-      fallback={
-        <main className="flex min-h-screen items-center justify-center">
-          <p className="text-ink-mute">Loading search...</p>
-        </main>
-      }
-    >
+    <Suspense fallback={<main className="flex min-h-screen items-center justify-center"><p className="text-ink-mute">Loading search...</p></main>}>
       <SearchPageContent />
     </Suspense>
   );

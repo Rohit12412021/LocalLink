@@ -531,3 +531,36 @@ export async function submitReview(
 }
 
 export const fetcher = apiFetch;
+
+// ── Services flat list ────────────────────────────────────────────────────────
+
+export type ServiceListing = {
+  serviceId: string;
+  name: string;
+  price: string;
+  description: string | null;
+  category: string;
+  subItems: Array<{ id: string; name: string; price: string; description?: string | null }>;
+  provider: {
+    id: string;
+    name: string;
+    rating: number;
+    reviewCount: number;
+    location: string;
+    distance: string;
+    available: boolean;
+    avatarUrl: string | null;
+    experience: string;
+  };
+};
+
+export async function getServices(params?: {
+  category?: string;
+  q?: string;
+}): Promise<ServiceListing[]> {
+  const qs = new URLSearchParams();
+  if (params?.category) qs.set('category', params.category);
+  if (params?.q) qs.set('q', params.q);
+  const query = qs.toString();
+  return apiFetch<ServiceListing[]>(`/services${query ? `?${query}` : ''}`);
+}

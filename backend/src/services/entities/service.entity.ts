@@ -25,7 +25,7 @@ export class ServiceEntity {
   @Column({ type: 'varchar', length: 160 })
   name: string;
 
-  /** Base/starting price shown on card — e.g. "₹500 onwards" */
+  /** Starting / base price */
   @Column({ type: 'varchar', length: 80 })
   price: string;
 
@@ -33,10 +33,14 @@ export class ServiceEntity {
   description: string | null;
 
   /**
-   * Optional sub-items (sub-categories) with individual prices.
-   * Stored as JSON so no migration needed — just a new nullable column.
-   * Example: [{ id: "uuid", name: "AC Filter Change", price: "₹300" }]
+   * Service-level category — lets one provider offer services across different categories.
+   * e.g. "Riya Car Repair" can offer "AC Repair" AND "Car Repair" services.
+   * Falls back to the provider's category if not set.
    */
+  @Column({ type: 'varchar', length: 80, nullable: true })
+  category: string | null;
+
+  /** Sub-options with individual prices (stored as JSONB) */
   @Column({ type: 'jsonb', nullable: true, default: null })
   subItems: ServiceSubItem[] | null;
 

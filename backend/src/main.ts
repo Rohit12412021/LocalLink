@@ -15,6 +15,7 @@ const logger = new Logger('Bootstrap');
 async function runSafeMigrations(dataSource: DataSource) {
   try {
     await dataSource.query(`ALTER TABLE services ADD COLUMN IF NOT EXISTS "subItems" jsonb DEFAULT NULL;`);
+    await dataSource.query(`ALTER TABLE services ADD COLUMN IF NOT EXISTS category varchar(80) DEFAULT NULL;`);
     await dataSource.query(`ALTER TABLE providers ADD COLUMN IF NOT EXISTS "avatarUrl" varchar(500) DEFAULT NULL;`);
     try { await dataSource.query(`ALTER TABLE providers ADD COLUMN IF NOT EXISTS gallery text DEFAULT '';`); } catch {}
     logger.log('[Migration] Safe column additions completed');
