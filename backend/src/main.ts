@@ -12,24 +12,14 @@ import * as path from 'path';
 
 const logger = new Logger('Bootstrap');
 
-/** Safe migrations — add columns that might be missing on production DB */
 async function runSafeMigrations(dataSource: DataSource) {
   try {
-    // Add subItems JSONB column to services if not present
-    await dataSource.query(`
-      ALTER TABLE services ADD COLUMN IF NOT EXISTS "subItems" jsonb DEFAULT NULL;
-    `);
-    // Add avatarUrl to providers if not present (older deployments may miss it)
-    await dataSource.query(`
-      ALTER TABLE providers ADD COLUMN IF NOT EXISTS "avatarUrl" varchar(500) DEFAULT NULL;
-    `);
-    // Add gallery column if not present
-    await dataSource.query(`
-      ALTER TABLE providers ADD COLUMN IF NOT EXISTS gallery text DEFAULT '';
-    `).catch(() => {}); // ignore if column type conflicts
+    await dataSource.query(`ALTER TABLE services ADD COLUMN IF NOT EXISTS "subItems" jsonb DEFAULT NULL;`);
+    await dataSource.query(`ALTER TABLE providers ADD COLUMN IF NOT EXISTS "avatarUrl" varchar(500) DEFAULT NULL;`);
+    try { await dataSource.query(`ALTER TABLE providers ADD COLUMN IF NOT EXISTS gallery text DEFAULT '';`); } catch {}
     logger.log('[Migration] Safe column additions completed');
   } catch (err) {
-    logger.warn(`[Migration] Safe migration warning (non-fatal): ${(err as Error).message}`);
+    logger.warn(`[Migration] Non-fatal: ${(err as Error).message}`);
   }
 }
 
@@ -37,14 +27,11 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.use(helmet());
 
-  // Run safe migrations before accepting traffic
   try {
     const dataSource = app.get(DataSource);
-    if (dataSource.isInitialized) {
-      await runSafeMigrations(dataSource);
-    }
+    if (dataSource.isInitialized) await runSafeMigrations(dataSource);
   } catch (err) {
-    logger.warn(`[Migration] Could not run migrations: ${(err as Error).message}`);
+    logger.warn(`[Migration] Could not run: ${(err as Error).message}`);
   }
 
   app.useStaticAssets(path.join(process.cwd(), 'public'), {
@@ -52,12 +39,7 @@ async function bootstrap() {
     maxAge: '7d',
     fallthrough: true,
   });
-    prefix: '/uploads',
-    maxAge: '7d',
-    fallthrough: true,
-  });
 
-  // Allow localhost dev + any configured production origin
   const allowedOrigins = [
     process.env.CORS_ORIGIN,
     'http://localhost:3000',
@@ -66,7 +48,6 @@ async function bootstrap() {
 
   app.enableCors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (mobile apps, curl, Postman)
       if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) return callback(null, true);
       return callback(null, false);
@@ -81,9 +62,7 @@ async function bootstrap() {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
-      transformOptions: {
-        enableImplicitConversion: true,
-      },
+      transformOptions: { enableImplicitConversion: true },
     }),
   );
 
