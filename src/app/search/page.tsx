@@ -74,8 +74,9 @@ function SearchPageContent() {
           service.name.toLowerCase().includes(query),
         );
 
+      const normalize = (s: string) => s.toLowerCase().replace(/[\s-_]+/g, '');
       const matchesCategory =
-        !category || provider.category.toLowerCase() === category;
+        !category || normalize(provider.category) === normalize(category);
 
       let matchesFilter = true;
 

@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { ArrowLeft, CalendarCheck, MessageSquare } from "lucide-react";
-import { motion } from "framer-motion";
 
 import ProviderHeader from "@/components/provider/provider-header";
 import ProviderAbout from "@/components/provider/provider-about";
 import ProviderServices from "@/components/provider/provider-services";
 import ProviderGallery from "@/components/provider/provider-gallery";
 import ProviderReviews from "@/components/provider/provider-reviews";
+import ProviderReviewCta from "@/components/provider/provider-review-cta";
 import { getApiBaseUrl } from "@/lib/api";
 import type { Provider } from "@/types";
 
@@ -66,6 +66,7 @@ export default async function ProviderPage({ params }: Props) {
           <ProviderAbout about={provider.about} />
           <ProviderGallery images={provider.gallery ?? []} />
           <ProviderServices services={provider.services} />
+          <ProviderReviewCta providerId={provider.id} />
           <ProviderReviews providerId={provider.id} />
         </div>
       </div>

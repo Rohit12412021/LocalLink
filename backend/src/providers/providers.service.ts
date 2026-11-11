@@ -32,9 +32,11 @@ export type ProviderDto = {
   whatsapp: string;
   experience: string;
   about: string;
+  avatarUrl: string | null;
+  gallery: string[];
   latitude?: number | null;
   longitude?: number | null;
-  services: Array<{ id?: string; name: string; price: string; description?: string | null }>;
+  services: Array<{ id?: string; name: string; price: string; description?: string | null; subItems?: any[] }>;
 };
 
 export type ProviderQuery = {
@@ -54,10 +56,7 @@ export class ProvidersService {
     private readonly servicesRepo: Repository<ServiceEntity>,
   ) {}
 
-  private toDto(
-    provider: ProviderEntity,
-    distanceOverride?: string,
-  ): ProviderDto {
+  private toDto(provider: ProviderEntity, distanceOverride?: string): ProviderDto {
     return {
       id: provider.id,
       name: provider.name,
@@ -72,6 +71,8 @@ export class ProvidersService {
       whatsapp: provider.whatsapp ?? provider.phone ?? '',
       experience: provider.experience ?? '',
       about: provider.about ?? '',
+      avatarUrl: provider.avatarUrl ?? null,
+      gallery: provider.gallery ?? [],
       latitude: provider.latitude,
       longitude: provider.longitude,
       services: (provider.services || []).map((s) => ({
@@ -79,7 +80,7 @@ export class ProvidersService {
         name: s.name,
         price: s.price,
         description: s.description,
-        subItems: s.subItems || [],
+        subItems: (s as any).subItems || [],
       })),
     };
   }
@@ -91,8 +92,10 @@ export class ProvidersService {
     });
 
     if (query.category && query.category !== 'all') {
-      const cat = query.category.toLowerCase();
-      providers = providers.filter((p) => p.category.toLowerCase() === cat);
+      // Normalize both sides: "car-repair" matches "Car Repair", "car repair", "carrepair"
+      const normalize = (s: string) => s.toLowerCase().replace(/[\s-_]+/g, '');
+      const cat = normalize(query.category);
+      providers = providers.filter((p) => normalize(p.category) === cat);
     }
 
     if (query.q) {
@@ -102,7 +105,11 @@ export class ProvidersService {
           p.name.toLowerCase().includes(q) ||
           p.category.toLowerCase().includes(q) ||
           p.location.toLowerCase().includes(q) ||
-          (p.services || []).some((s) => s.name.toLowerCase().includes(q)),
+          (p.services || []).some(
+            (s) =>
+              s.name.toLowerCase().includes(q) ||
+              (s.subItems || []).some((sub) => sub.name.toLowerCase().includes(q)),
+          ),
       );
     }
 
@@ -206,21 +213,45 @@ export class ProvidersService {
   async createService(userId: string, dto: CreateServiceDto): Promise<ProviderDto> {
     const provider = await this.findByUserId(userId);
     const { v4: uuidv4 } = await import('uuid');
-    const service = this.servicesRepo.create({
+
+    const subItemsData = dto.subItems && dto.subItems.length > 0
+      ? dto.subItems.map(s => ({
+          id: s.id || uuidv4(),
+          name: s.name.trim(),
+          price: s.price.trim(),
+          description: s.description?.trim() || null,
+        }))
+      : null;
+
+    // Build service object without subItems first (safe for DBs where column may not exist yet)
+    const serviceData: Partial<ServiceEntity> = {
       name: dto.name.trim(),
       price: dto.price.trim(),
       description: dto.description?.trim() || null,
-      subItems: dto.subItems
-        ? dto.subItems.map(s => ({
-            id: s.id || uuidv4(),
-            name: s.name.trim(),
-            price: s.price.trim(),
-            description: s.description?.trim() || null,
-          }))
-        : null,
       providerId: provider.id,
-    });
-    await this.servicesRepo.save(service);
+    };
+
+    if (subItemsData) {
+      (serviceData as any).subItems = subItemsData;
+    }
+
+    const service = this.servicesRepo.create(serviceData as ServiceEntity);
+
+    try {
+      await this.servicesRepo.save(service);
+    } catch (err: any) {
+      // If subItems column doesn't exist yet on production DB, retry without it
+      if (subItemsData && (
+        err?.message?.includes('subItems') ||
+        err?.message?.includes('column') ||
+        err?.code === '42703'
+      )) {
+        delete (service as any).subItems;
+        await this.servicesRepo.save(service);
+      } else {
+        throw err;
+      }
+    }
 
     if (!provider.price) {
       provider.price = dto.price.trim();

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as nodemailer from 'nodemailer';
 import { google } from 'googleapis';
 import { SocketGateway } from './socket.gateway';
 import { NotificationEntity } from './entities/notification.entity';
@@ -23,7 +24,9 @@ export type CreateNotificationInput = {
 @Injectable()
 export class NotificationsService implements OnModuleInit {
   private readonly logger = new Logger(NotificationsService.name);
+  private transporter: nodemailer.Transporter | null = null;
   private gmail: ReturnType<typeof google.gmail> | null = null;
+  private emailMode: 'smtp' | 'gmail-api' | 'disabled' = 'disabled';
 
   constructor(
     @InjectRepository(NotificationEntity)
@@ -32,85 +35,104 @@ export class NotificationsService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    // ── Priority 1: SMTP (fast, no token refresh delay) ──────────────────
+    const smtpHost = process.env.SMTP_HOST?.trim();
+    const smtpUser = process.env.SMTP_USER?.trim();
+    const smtpPass = process.env.SMTP_PASS?.trim();
+
+    if (smtpHost && smtpUser && smtpPass) {
+      this.transporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: Number(process.env.SMTP_PORT || 465),
+        secure: process.env.SMTP_SECURE !== 'false',
+        auth: { user: smtpUser, pass: smtpPass },
+        // Connection pool for speed
+        pool: true,
+        maxConnections: 3,
+        maxMessages: 100,
+        // Keep connection alive
+        socketTimeout: 10000,
+      });
+      // Verify connection eagerly (non-blocking)
+      this.transporter.verify().then(() => {
+        this.emailMode = 'smtp';
+        this.logger.log(`[Email] SMTP ready → ${smtpHost} (${smtpUser})`);
+      }).catch(err => {
+        this.logger.error(`[Email] SMTP verify failed: ${err.message}`);
+        this.transporter = null;
+        this.initGmailApi();
+      });
+      return;
+    }
+
+    // ── Priority 2: Gmail API ─────────────────────────────────────────────
+    this.initGmailApi();
+  }
+
+  private initGmailApi() {
     const clientId = process.env.GMAIL_CLIENT_ID?.trim();
     const clientSecret = process.env.GMAIL_CLIENT_SECRET?.trim();
     const refreshToken = process.env.GMAIL_REFRESH_TOKEN?.trim();
     const sender = process.env.GMAIL_USER?.trim();
 
     if (!clientId || !clientSecret || !refreshToken || !sender) {
-      this.logger.warn(
-        '[Email] Gmail credentials missing. Email sending is disabled.',
-      );
+      this.logger.warn('[Email] No email credentials configured. Emails disabled.');
       return;
     }
 
-    const auth = new google.auth.OAuth2(
-      clientId,
-      clientSecret,
-      'https://developers.google.com/oauthplayground',
-    );
-
-    auth.setCredentials({
-      refresh_token: refreshToken,
-    });
-
-    this.gmail = google.gmail({
-      version: 'v1',
-      auth,
-    });
-
-    this.logger.log('[Email] Gmail API initialized successfully');
+    const auth = new google.auth.OAuth2(clientId, clientSecret, 'https://developers.google.com/oauthplayground');
+    auth.setCredentials({ refresh_token: refreshToken });
+    this.gmail = google.gmail({ version: 'v1', auth });
+    this.emailMode = 'gmail-api';
+    this.logger.log('[Email] Gmail API ready.');
   }
 
-  private async sendEmail(
-    to: string,
-    subject: string,
-    content: { html?: string; text?: string },
-  ) {
-    if (!this.gmail) {
-      throw new Error('Gmail API is not configured');
+  private get fromAddress(): string {
+    return process.env.SMTP_FROM || process.env.GMAIL_USER || 'LocalLink <noreply@locallink.app>';
+  }
+
+  private async sendEmail(to: string, subject: string, content: { html?: string; text?: string }) {
+    // ── SMTP path (fast) ──────────────────────────────────────────────────
+    if (this.transporter && this.emailMode === 'smtp') {
+      await this.transporter.sendMail({
+        from: this.fromAddress,
+        to,
+        subject,
+        html: content.html,
+        text: content.text,
+      });
+      this.logger.log(`[Email] SMTP sent to ${to} — "${subject}"`);
+      return;
     }
 
-    const sender = process.env.GMAIL_USER?.trim();
+    // ── Gmail API path ────────────────────────────────────────────────────
+    if (this.gmail && this.emailMode === 'gmail-api') {
+      const sender = process.env.GMAIL_USER?.trim();
+      if (!sender) throw new Error('GMAIL_USER not configured');
 
-    if (!sender) {
-      throw new Error('GMAIL_USER is not configured');
+      const body = content.html ?? content.text ?? '';
+      const contentType = content.html ? 'text/html' : 'text/plain';
+      const encoded = Buffer.from(body, 'utf8').toString('base64');
+      const message = [
+        `From: LocalLink <${sender}>`,
+        `To: ${to}`,
+        `Subject: ${subject}`,
+        'MIME-Version: 1.0',
+        `Content-Type: ${contentType}; charset=utf-8`,
+        'Content-Transfer-Encoding: base64',
+        '',
+        encoded,
+      ].join('\r\n');
+
+      const result = await this.gmail.users.messages.send({
+        userId: 'me',
+        requestBody: { raw: Buffer.from(message, 'utf8').toString('base64url') },
+      });
+      this.logger.log(`[Email] Gmail API sent to ${to}. ID: ${result.data.id}`);
+      return;
     }
 
-    const body = content.html ?? content.text;
-
-    if (body === undefined) {
-      throw new Error('Email must contain HTML or text');
-    }
-
-    const contentType =
-      content.html !== undefined ? 'text/html' : 'text/plain';
-
-    const encodedBody = Buffer.from(body, 'utf8').toString('base64');
-
-    const message = [
-      `From: LocalLink <${sender}>`,
-      `To: ${to}`,
-      `Subject: ${subject}`,
-      'MIME-Version: 1.0',
-      `Content-Type: ${contentType}; charset=utf-8`,
-      'Content-Transfer-Encoding: base64',
-      '',
-      encodedBody,
-    ].join('\r\n');
-
-    const raw = Buffer.from(message, 'utf8').toString('base64url');
-
-    const result = await this.gmail.users.messages.send({
-      userId: 'me',
-      requestBody: { raw },
-    });
-
-    this.logger.log(
-      `[Email] Sent successfully to ${to}. ID: ${result.data.id}`,
-    );
-
-    return result.data;
+    this.logger.warn(`[Email] No email transport configured — skipping email to ${to}`);
   }
 
   // --------------------------------------------------

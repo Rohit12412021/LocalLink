@@ -15,7 +15,7 @@ import type { Provider } from "@/types";
 
 export default function ProviderProfilePage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, refreshMe } = useAuth();
   const [provider, setProvider] = useState<Provider | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -61,9 +61,13 @@ export default function ProviderProfilePage() {
     try {
       setUploading(true);
       await uploadProfilePhoto(file);
-      await loadProfile();
+      // Reload both provider profile AND auth user so navbar avatar updates
+      await Promise.all([loadProfile(), refreshMe()]);
       toast.success("Profile photo updated!");
-    } catch { toast.error("Failed to upload photo."); }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to upload photo.";
+      toast.error(msg);
+    }
     finally { setUploading(false); }
   }
 
@@ -125,7 +129,7 @@ export default function ProviderProfilePage() {
           <div className="relative shrink-0">
             <div className="relative group">
               {provider.avatarUrl ? (
-                <img src={provider.avatarUrl} alt={provider.name} className="h-32 w-32 rounded-2xl object-cover shadow-lg" />
+                <img src={provider.avatarUrl} alt={provider.name} className="h-32 w-32 rounded-2xl object-cover object-center shadow-lg" />
               ) : (
                 <div className="flex h-32 w-32 items-center justify-center rounded-2xl bg-brand-soft text-4xl font-bold text-brand shadow-lg">
                   {provider.name.charAt(0)}

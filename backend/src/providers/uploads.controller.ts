@@ -34,14 +34,18 @@ export class UploadsController {
     @UploadedFile() file: UploadedFile,
     @CurrentUser() user: JwtPayloadUser,
   ) {
+    if (!file || !file.buffer) {
+      throw new BadRequestException('No file uploaded');
+    }
     const stored = await this.uploadsService.saveImage(file, 'avatars');
 
+    // Update provider avatar
     await this.providersRepo.update(
       { userId: user.userId },
       { avatarUrl: stored.url },
     );
 
-    return { url: stored.url };
+    return { url: stored.url, message: 'Avatar updated successfully' };
   }
 
   @Post('gallery')
